@@ -112,6 +112,13 @@ bl_train <- bl_train %>%
   )
 ```
 
+```{r}
+bl_test <- bl_test %>% 
+  mutate(
+    term = ifelse(term == "36 months", 36, 60)
+  )
+```
+
 
 ## Folding Data
 
@@ -140,23 +147,23 @@ bl_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>%
   step_zv(all_predictors()) %>% 
   step_normalize(all_numeric(), -money_made_inv)
 
-bake(prep(bl_recipe), new_data = NULL)
-
 # acc_now_delinq + acc_open_past_24mths + addr_state + annual_inc + application_type + avg_cur_bal + bc_util + delinq_2yrs + delinq_amnt + dti + earliest_cr_line + emp_length + emp_title + grade + home_ownership + initial_list_status + int_rate + last_credit_pull_d + loan_amnt + mort_acc + num_sats + num_tl_120dpd_2m + num_tl_30dpd + num_tl_90g_dpd_24m + out_prncp_inv + pub_rec + pub_rec_bankruptcies + sub_grade + term + tot_coll_amt + tot_cur_bal + total_rec_late_fee + verification_status,
 
 
 bl_en_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
   step_rm(id, purpose, last_credit_pull_d, earliest_cr_line, application_type, delinq_amnt, num_tl_120dpd_2m, num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv, pub_rec, pub_rec_bankruptcies, total_rec_late_fee) %>% 
-  step_knnimpute(emp_length) %>% 
-  step_other(emp_title, threshold = 0.02) %>% 
-  step_other(addr_state, threshold = 0.02) %>% 
-  step_other(emp_length, threshold = 0.02) %>% 
-  step_other(sub_grade, threshold = 0.02) %>%
+  step_impute_knn(emp_length) %>% 
+  step_other(emp_title, threshold = 0.1) %>% 
+  step_other(addr_state, threshold = 0.1) %>% 
+  step_other(emp_length, threshold = 0.1) %>% 
+  step_other(sub_grade, threshold = 0.1) %>%
   step_dummy(all_nominal()) %>% 
   step_log(num_sats) %>%
   step_interact(money_made_inv ~ (.)^2) %>% 
   step_zv(all_predictors()) %>% 
   step_normalize(all_numeric(), -money_made_inv)
+
+pb <- bake(prep(bl_recipe), new_data = NULL)
 
 bl_nochar_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
   step_rm(all_nominal(), id, emp_title, purpose, last_credit_pull_d, earliest_cr_line, acc_now_delinq, application_type, delinq_amnt, num_tl_120dpd_2m, num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv, pub_rec, pub_rec_bankruptcies, total_rec_late_fee) %>% 
@@ -184,8 +191,6 @@ save(bl_folds,
      bl_train,
      bl_test,
      bl_controls,
-     bl_nochar_recipe,
-     bl_en_nochar_recipe,
      file = "model_info/bl_setup.rda")
 
 ```

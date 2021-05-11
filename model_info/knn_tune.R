@@ -51,7 +51,7 @@ final_results <- knn_results %>%
   rename("Id" = id,
          "Predicted" = .pred)
 
-write_csv(final_results, path="Lin_Kylie_RegComp.csv")
+write_csv(final_results, path = "Lin_Kylie_RegComp.csv")
 
 # final_results %>% 
 #   rename("Id" = id,
