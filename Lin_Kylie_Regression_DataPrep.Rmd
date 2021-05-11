@@ -1,0 +1,230 @@
+---
+title: "Data Prep Document"
+author: "Kylie Lin"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    highlight: "tango"
+---
+
+## Data Prep
+
+```{r, message = F, warning = F}
+library(tidyverse)
+library(tidymodels)
+library(janitor)
+library(skimr)
+library(DT)
+library(lubridate)
+library(naniar)
+
+library(rsample)
+library(tidymodels)
+library(ranger)
+library(glmnet)
+library(xgboost)
+library(neighbr)
+library(e1071)
+library(earth)
+
+```
+
+
+## Loading Data
+
+```{r, message = F, warning = F}
+bl_test <- read_csv("stat-301-3-regression-2021-bank-loans/test.csv") %>% 
+  clean_names()
+
+bl_train <- read_csv("stat-301-3-regression-2021-bank-loans/train.csv") %>% 
+  clean_names()
+
+bl_train %>% 
+  datatable()
+```
+
+### Check for skewness to address - some skewness, will address below
+
+```{r}
+# commented out for document readability
+bl_train %>%
+  skim()
+```
+
+
+### Check for missingness - there's none.
+
+```{r}
+bl_train %>% 
+  miss_var_summary() %>% 
+  datatable()
+
+```
+
+```{r}
+bl_train %>% 
+  ggplot(aes(money_made_inv)) +
+  geom_histogram()
+
+```
+
+```{r}
+bl_train %>% 
+  filter(delinq_amnt != 0) %>% 
+  count()
+```
+
+
+
+```{r}
+bl_train %>% 
+  ggplot(aes(mort_acc)) +
+  geom_histogram()
+
+bl_train %>% 
+  ggplot(aes(total_rec_late_fee)) +
+  geom_histogram()
+
+bl_train %>% 
+  ggplot(aes(addr_state)) +
+  geom_histogram(stat="count")
+```
+
+```{r}
+ggplot(bl_train, aes(purpose, term)) +
+  geom_tile()
+```
+
+
+
+```{r}
+bl_train %>% 
+  ggplot(aes(acc_open_past_24mths, annual_inc)) +
+  geom_point()
+```
+
+
+```{r}
+bl_train <- bl_train %>% 
+  mutate(
+    term = ifelse(term == "36 months", 36, 60)
+  )
+```
+
+
+## Folding Data
+
+```{r}
+bl_folds <- bl_train %>%
+  vfold_cv(v = 5, repeats = 3, strata = money_made_inv)
+bl_folds
+
+```
+
+
+## Building the Recipe
+
+```{r}
+bl_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
+  step_rm(id, purpose, last_credit_pull_d, earliest_cr_line,
+          acc_now_delinq, application_type, delinq_amnt, num_tl_120dpd_2m,
+          num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv, pub_rec,
+          pub_rec_bankruptcies, total_rec_late_fee) %>% 
+  step_impute_knn(emp_length) %>% 
+  step_other(emp_title, threshold = 0.02) %>% 
+  step_other(addr_state, threshold = 0.02) %>% 
+  step_other(emp_length, threshold = 0.02) %>% 
+  step_other(sub_grade, threshold = 0.02) %>%
+  step_dummy(all_nominal(), one_hot = T) %>%
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_numeric(), -money_made_inv)
+
+bake(prep(bl_recipe), new_data = NULL)
+
+# acc_now_delinq + acc_open_past_24mths + addr_state + annual_inc + application_type + avg_cur_bal + bc_util + delinq_2yrs + delinq_amnt + dti + earliest_cr_line + emp_length + emp_title + grade + home_ownership + initial_list_status + int_rate + last_credit_pull_d + loan_amnt + mort_acc + num_sats + num_tl_120dpd_2m + num_tl_30dpd + num_tl_90g_dpd_24m + out_prncp_inv + pub_rec + pub_rec_bankruptcies + sub_grade + term + tot_coll_amt + tot_cur_bal + total_rec_late_fee + verification_status,
+
+
+bl_en_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
+  step_rm(id, purpose, last_credit_pull_d, earliest_cr_line, application_type, delinq_amnt, num_tl_120dpd_2m, num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv, pub_rec, pub_rec_bankruptcies, total_rec_late_fee) %>% 
+  step_knnimpute(emp_length) %>% 
+  step_other(emp_title, threshold = 0.02) %>% 
+  step_other(addr_state, threshold = 0.02) %>% 
+  step_other(emp_length, threshold = 0.02) %>% 
+  step_other(sub_grade, threshold = 0.02) %>%
+  step_dummy(all_nominal()) %>% 
+  step_log(num_sats) %>%
+  step_interact(money_made_inv ~ (.)^2) %>% 
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_numeric(), -money_made_inv)
+
+bl_nochar_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
+  step_rm(all_nominal(), id, emp_title, purpose, last_credit_pull_d, earliest_cr_line, acc_now_delinq, application_type, delinq_amnt, num_tl_120dpd_2m, num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv, pub_rec, pub_rec_bankruptcies, total_rec_late_fee) %>% 
+  step_log(num_sats) %>% 
+  step_normalize(all_numeric(), -money_made_inv)
+
+bl_en_nochar_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
+  step_rm(all_nominal(), id, emp_title, purpose, last_credit_pull_d, earliest_cr_line, acc_now_delinq, application_type, delinq_amnt, num_tl_120dpd_2m, num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv, pub_rec, pub_rec_bankruptcies, total_rec_late_fee) %>% 
+  step_log(num_sats) %>%
+  step_interact(money_made_inv ~ (.)^2) %>% 
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_numeric(), -money_made_inv)
+
+```
+
+## Writing Objects for Tuning
+
+```{r}
+bl_controls <- control_resamples(save_pred = TRUE)
+
+# Model setup and tuning
+save(bl_folds, 
+     bl_recipe,
+     bl_en_recipe,
+     bl_train,
+     bl_test,
+     bl_controls,
+     bl_nochar_recipe,
+     bl_en_nochar_recipe,
+     file = "model_info/bl_setup.rda")
+
+```
+
+```{r}
+load("model_info/knn_tune.rda")
+```
+
+```{r}
+final_results %>% 
+  rename("Id" = id,
+         "Predicted" = .pred)
+
+final_results <- final_results[c(2,1)]
+```
+
+``` {r}
+final_results <- final_results %>% 
+  rename("Id" = id,
+         "Predicted" = .pred)
+```
+
+``` {r}
+write_csv(final_results, path="Lin_Kylie_RegComp.csv")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
