@@ -5,12 +5,7 @@ library(tidyverse)
 library(tictoc)
 library(rsample)
 library(tidymodels)
-library(ranger)
 library(glmnet)
-library(xgboost)
-library(neighbr)
-library(e1071)
-library(earth)
 
 # set seed
 set.seed(3013)

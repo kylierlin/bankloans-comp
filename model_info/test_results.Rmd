@@ -40,11 +40,12 @@ load("bl_setup.rda")
 ```{r}
 rf_results <- read_csv("Lin_Kylie_RF_RegComp.csv") %>% 
   select(Predicted)
+
 rf_results %>% 
   summary()
-rf_results %>% 
-  ggplot(aes(Predicted)) +
-    geom_histogram(bins = 500)
+# rf_results %>% 
+#   ggplot(aes(Predicted)) +
+#     geom_histogram(bins = 500)
 bl_train %>% 
   select(money_made_inv) %>% 
   summary()

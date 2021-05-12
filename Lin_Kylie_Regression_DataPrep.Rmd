@@ -134,7 +134,7 @@ bl_test
 
 ```{r}
 bl_folds <- bl_train %>%
-  vfold_cv(v = 7, repeats = 4, strata = money_made_inv)
+  vfold_cv(v = 5, repeats = 3)
 bl_folds
 
 ```
@@ -143,15 +143,22 @@ bl_folds
 ## Building the Recipe
 
 ```{r}
+
+```
+
+
+```{r}
 bl_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
   step_rm(id, acc_now_delinq, delinq_amnt,
           num_tl_120dpd_2m, num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv,
           pub_rec, pub_rec_bankruptcies, total_rec_late_fee) %>%
-  step_impute_knn(all_predictors()) %>% 
   step_other(emp_title, threshold = 0.05) %>% 
   step_other(emp_length, purpose, threshold = 0.1) %>% 
   step_other(grade, sub_grade, home_ownership, addr_state, threshold = 0.02) %>%
   step_date(earliest_cr_line, last_credit_pull_d, features = c("month", "year")) %>%
+  step_rm(earliest_cr_line, last_credit_pull_d) %>% 
+  step_YeoJohnson(acc_open_past_24mths, annual_inc, avg_cur_bal, int_rate,
+                  tot_coll_amt, int_rate, num_sats) %>% 
   step_dummy(all_nominal_predictors()) %>%
   step_nzv(all_predictors()) %>% 
   step_normalize(all_numeric(), -money_made_inv)
