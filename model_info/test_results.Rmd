@@ -1,0 +1,70 @@
+---
+title: "test_1"
+author: "Kylie Lin"
+date: "5/11/2021"
+output:
+    html_document:
+    toc: true
+    toc_float: true
+    highlight: "tango"
+---
+
+## Data Prep
+
+```{r, message = F, warning = F}
+library(tidyverse)
+library(tidymodels)
+library(janitor)
+library(skimr)
+library(DT)
+library(lubridate)
+library(naniar)
+library(zoo)
+
+library(rsample)
+library(tidymodels)
+library(ranger)
+library(glmnet)
+library(xgboost)
+library(neighbr)
+library(e1071)
+library(earth)
+
+```
+
+
+```{r}
+load("bl_setup.rda")
+```
+
+```{r}
+rf_results <- read_csv("Lin_Kylie_RF_RegComp.csv") %>% 
+  select(Predicted)
+rf_results %>% 
+  summary()
+rf_results %>% 
+  ggplot(aes(Predicted)) +
+    geom_histogram(bins = 500)
+bl_train %>% 
+  select(money_made_inv) %>% 
+  summary()
+```
+
+
+```{r}
+bl_train %>% 
+  ggplot(aes(money_made_inv)) +
+    geom_histogram(bins = 500)
+```
+
+
+
+```{r}
+bl_train %>% 
+  ggplot(aes(sub_grade)) +
+    geom_histogram(stat="count")
+```
+
+
+
+

@@ -18,6 +18,7 @@ library(skimr)
 library(DT)
 library(lubridate)
 library(naniar)
+library(zoo)
 
 library(rsample)
 library(tidymodels)
@@ -108,23 +109,32 @@ bl_train %>%
 ```{r}
 bl_train <- bl_train %>% 
   mutate(
-    term = ifelse(term == "36 months", 36, 60)
+    term = ifelse(term == "36 months", 36, 60),
+    last_credit_pull_d = as.Date(as.yearmon(last_credit_pull_d, format = "%b-%Y")), 
+    earliest_cr_line = as.Date(as.yearmon(earliest_cr_line, format = "%b-%Y"))
   )
 ```
 
 ```{r}
 bl_test <- bl_test %>% 
   mutate(
-    term = ifelse(term == "36 months", 36, 60)
+    term = ifelse(term == "36 months", 36, 60),
+    last_credit_pull_d = as.Date(as.yearmon(last_credit_pull_d, format = "%b-%Y")), 
+    earliest_cr_line = as.Date(as.yearmon(earliest_cr_line, format = "%b-%Y"))
   )
 ```
+
+```{r}
+bl_test
+```
+
 
 
 ## Folding Data
 
 ```{r}
 bl_folds <- bl_train %>%
-  vfold_cv(v = 5, repeats = 3, strata = money_made_inv)
+  vfold_cv(v = 7, repeats = 4, strata = money_made_inv)
 bl_folds
 
 ```
@@ -134,16 +144,31 @@ bl_folds
 
 ```{r}
 bl_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
-  step_rm(id, purpose, last_credit_pull_d, earliest_cr_line,
-          acc_now_delinq, application_type, delinq_amnt, num_tl_120dpd_2m,
-          num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv, pub_rec,
-          pub_rec_bankruptcies, total_rec_late_fee) %>% 
-  step_impute_knn(emp_length) %>% 
-  step_other(emp_title, threshold = 0.02) %>% 
-  step_other(addr_state, threshold = 0.02) %>% 
-  step_other(emp_length, threshold = 0.02) %>% 
-  step_other(sub_grade, threshold = 0.02) %>%
-  step_dummy(all_nominal(), one_hot = T) %>%
+  step_rm(id, acc_now_delinq, delinq_amnt,
+          num_tl_120dpd_2m, num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv,
+          pub_rec, pub_rec_bankruptcies, total_rec_late_fee) %>%
+  step_impute_knn(all_predictors()) %>% 
+  step_other(emp_title, threshold = 0.05) %>% 
+  step_other(emp_length, purpose, threshold = 0.1) %>% 
+  step_other(grade, sub_grade, home_ownership, addr_state, threshold = 0.02) %>%
+  step_date(earliest_cr_line, last_credit_pull_d, features = c("month", "year")) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_nzv(all_predictors()) %>% 
+  step_normalize(all_numeric(), -money_made_inv)
+
+bake(prep(bl_recipe), new_data = NULL)
+
+```
+
+``` {r}
+
+bl_nn_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
+  step_rm(id, purpose, acc_now_delinq, earliest_cr_line, last_credit_pull_d, application_type, delinq_amnt, num_tl_120dpd_2m, num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv, pub_rec, pub_rec_bankruptcies, total_rec_late_fee) %>%
+  step_other(emp_title, threshold = 0.05) %>% 
+  step_other(addr_state, threshold = 0.05) %>% 
+  step_other(emp_length, threshold = 0.05) %>% 
+  step_other(sub_grade, threshold = 0.05) %>%
+  step_dummy(all_nominal_predictors()) %>%
   step_zv(all_predictors()) %>% 
   step_normalize(all_numeric(), -money_made_inv)
 
@@ -152,19 +177,21 @@ bl_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>%
 
 bl_en_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
   step_rm(id, purpose, last_credit_pull_d, earliest_cr_line, application_type, delinq_amnt, num_tl_120dpd_2m, num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv, pub_rec, pub_rec_bankruptcies, total_rec_late_fee) %>% 
-  step_impute_knn(emp_length) %>% 
-  step_other(emp_title, threshold = 0.1) %>% 
-  step_other(addr_state, threshold = 0.1) %>% 
-  step_other(emp_length, threshold = 0.1) %>% 
-  step_other(sub_grade, threshold = 0.1) %>%
+  step_impute_knn(all_predictors()) %>% 
+  step_other(emp_title, threshold = 0.05) %>% 
+  step_other(addr_state, threshold = 0.05) %>% 
+  step_other(emp_length, threshold = 0.05) %>% 
+  step_other(sub_grade, threshold = 0.05) %>%
   step_dummy(all_nominal()) %>% 
-  step_log(num_sats) %>%
   step_interact(money_made_inv ~ (.)^2) %>% 
   step_zv(all_predictors()) %>% 
   step_normalize(all_numeric(), -money_made_inv)
 
 pb <- bake(prep(bl_recipe), new_data = NULL)
 
+```
+
+``` {r}
 bl_nochar_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
   step_rm(all_nominal(), id, emp_title, purpose, last_credit_pull_d, earliest_cr_line, acc_now_delinq, application_type, delinq_amnt, num_tl_120dpd_2m, num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv, pub_rec, pub_rec_bankruptcies, total_rec_late_fee) %>% 
   step_log(num_sats) %>% 
@@ -191,6 +218,7 @@ save(bl_folds,
      bl_train,
      bl_test,
      bl_controls,
+     bl_nn_recipe,
      file = "model_info/bl_setup.rda")
 
 ```
