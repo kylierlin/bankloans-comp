@@ -32,25 +32,43 @@ library(earth)
 
 ```
 
-
 ```{r}
 load("bl_setup.rda")
+load("ensemble_tuning/blend_results.rda")
 ```
 
 ```{r}
 rf_results <- read_csv("Lin_Kylie_RF_RegComp.csv") %>% 
   select(Predicted)
 
-rf_results %>% 
+rf_new_results <- read_csv("Lin_Kylie_RF_NEW_RegComp.csv") %>% 
+  select(Predicted)
+
+mars_results <- read_csv("Lin_Kylie_MARS_RegComp.csv") %>% 
+  select(Predicted)
+
+ensemble_results <- read_csv("ensemble_tuning/Ensemble_Reg.csv") %>% 
+  select(Predicted)
+
+# rf_results %>% 
+#   summary()
+
+rf_new_results %>% 
   summary()
+
+# mars_results %>% 
+#   summary()
 # rf_results %>% 
 #   ggplot(aes(Predicted)) +
 #     geom_histogram(bins = 500)
+
+ensemble_results %>% 
+  summary()
+
 bl_train %>% 
   select(money_made_inv) %>% 
   summary()
 ```
-
 
 ```{r}
 bl_train %>% 
@@ -58,14 +76,75 @@ bl_train %>%
     geom_histogram(bins = 500)
 ```
 
-
-
 ```{r}
 bl_train %>% 
   ggplot(aes(sub_grade)) +
     geom_histogram(stat="count")
 ```
 
+```{r}
+bl_train %>% 
+  ggplot(aes(money_made_inv)) +
+  geom_histogram(bins = 100)
+```
+
+```{r}
+bl_model_st
+
+bl_train %>% 
+  ggplot(aes(money_made_inv)) +
+  geom_histogram() +
+  scale_y_continuous(limits = c(0, 3750)) +
+  scale_x_continuous(limits = c(-40000, 30000))
+
+bl_test %>% 
+  ggplot(aes(Predicted)) +
+  geom_histogram() +
+  scale_y_continuous(limits = c(0, 3750)) +
+  scale_x_continuous(limits = c(-40000, 30000))
+
+mars_results %>% 
+  ggplot(aes(Predicted)) +
+  geom_histogram() +
+  scale_y_continuous(limits = c(0, 3750)) +
+  scale_x_continuous(limits = c(-40000, 30000))
+```
+
+```{r}
+
+bl_test <- read_csv("ensemble_tuning/test.csv") %>% 
+  clean_names()
+
+bl_test <- bl_test %>% 
+  mutate(
+    term = ifelse(term == "36 months", 36, 60),
+    last_credit_pull_d = as.Date(as.yearmon(last_credit_pull_d, format = "%b-%Y")), 
+    earliest_cr_line = as.Date(as.yearmon(earliest_cr_line, format = "%b-%Y"))
+  )
+
+bl_model_st
+
+# predict(bl_model_st, bl_test)
+
+test_results <- bl_test %>%
+  bind_cols(predict(bl_model_st, .)) %>%
+  select(id, .pred) %>%
+  rename("Id" = id,
+         "Predicted" = .pred)
 
 
+
+```
+
+```{r}
+test_results
+```
+
+```{r}
+load("rf_NEW_tuned.rda")
+```
+
+```{r}
+autoplot(rf_tuned)
+```
 

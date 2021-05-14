@@ -19,6 +19,7 @@ library(DT)
 library(lubridate)
 library(naniar)
 library(zoo)
+library(caret)
 
 library(rsample)
 library(tidymodels)
@@ -28,6 +29,8 @@ library(xgboost)
 library(neighbr)
 library(e1071)
 library(earth)
+
+set.seed(3013)
 
 ```
 
@@ -139,11 +142,116 @@ bl_folds
 
 ```
 
+```{r}
+# bl_train <- bl_train %>% 
+#   mutate(
+#     addr_state = as.factor(addr_state),
+#     application_type = as.factor(application_type),
+#     emp_title = as.factor(emp_title),
+#     emp_length = as.factor(emp_length),
+#     grade = as.factor(grade),
+#     home_ownership = as.factor(home_ownership),
+#     initial_list_status = as.factor(initial_list_status),
+#     sub_grade = as.factor(sub_grade),
+#     verification_status = as.factor(verification_status)
+#   )
+# 
+# bl_train
+
+```
+
+```{r}
+bl_numeric <- bl_train %>% 
+  select(where(is.numeric))
+```
+
+
+```{r}
+bl_numeric
+```
+
+```{r}
+library(corrplot)
+correlationMatrix <- cor(bl_numeric[, 1:24])
+print(correlationMatrix)
+
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.5)
+# print(highlyCorrelated)
+corrplot(correlationMatrix)
+```
+
+```{r}
+ggplot(bl_train, aes(grade, money_made_inv)) +
+  geom_col()
+```
+
+```{r}
+ggplot(bl_train, aes(emp_title, money_made_inv)) +
+  geom_col()
+```
+
+```{r}
+ggplot(bl_train, aes(addr_state, money_made_inv)) +
+  geom_col()
+```
+
+
+```{r}
+ggplot(bl_train, aes(emp_title, money_made_inv)) +
+  geom_col()
+```
+
 
 ## Building the Recipe
 
 ```{r}
+# random forest / mars
+# leave out dates and emp_title
+# only work continous
+basic_recipe <- recipe(money_made_inv ~ acc_open_past_24mths + addr_state + annual_inc +
+                         avg_cur_bal + bc_util + dti +
+                         earliest_cr_line + emp_length + emp_title + grade +
+                         verification_status + home_ownership + initial_list_status +
+                         int_rate + loan_amnt + mort_acc + num_sats + out_prncp_inv +
+                         sub_grade + term + tot_coll_amt + tot_cur_bal,  
+                       data = bl_train) %>% 
+  step_impute_knn(all_predictors()) %>%
+  # this made MARS perform worse
+  # step_YeoJohnson(acc_open_past_24mths, annual_inc, avg_cur_bal, int_rate,
+  #                 tot_coll_amt, num_sats) %>%
+  step_other(home_ownership, threshold = 0.2) %>% 
+  step_other(grade, threshold = 0.1) %>%
+  step_other(sub_grade, threshold = 0.02) %>% 
+  step_other(application_type, addr_state, 
+             emp_length, emp_title, threshold = 0.02) %>% 
+  step_date(earliest_cr_line, features = c("month", "year")) %>%
+  step_rm(earliest_cr_line) %>% 
+  step_corr(all_numeric(), -all_outcomes(), threshold = 0.8) %>% 
+  step_dummy(all_nominal(), one_hot = T) %>% 
+  step_zv(all_predictors()) %>%
+  step_normalize(all_numeric(), -money_made_inv)
 
+basic_pb <- bake(prep(basic_recipe), new_data=NULL)
+basic_pb
+
+```
+
+```{r}
+barebones_recipe <- recipe(money_made_inv ~ out_prncp_inv + loan_amnt + int_rate + addr_state + 
+                             grade + emp_title + term,
+                       data = bl_train) %>% 
+  step_impute_knn(all_predictors()) %>% 
+  step_other(emp_title, addr_state, threshold = 0.02) %>% 
+  step_dummy(all_nominal(), one_hot = T) %>% 
+  step_nzv(all_predictors()) %>% 
+  step_normalize(all_numeric(), -money_made_inv)
+
+barebones_pb <- bake(prep(barebones_recipe), new_data=NULL)
+barebones_pb
+```
+
+```{r}
+basic_pb %>% count(verification_status_Verified)
 ```
 
 
@@ -153,7 +261,7 @@ bl_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>%
           num_tl_120dpd_2m, num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv,
           pub_rec, pub_rec_bankruptcies, total_rec_late_fee) %>%
   step_other(emp_title, threshold = 0.05) %>% 
-  step_other(emp_length, purpose, threshold = 0.1) %>% 
+  step_other(emp_length, purpose, threshold = 0.05) %>% 
   step_other(grade, sub_grade, home_ownership, addr_state, threshold = 0.02) %>%
   step_date(earliest_cr_line, last_credit_pull_d, features = c("month", "year")) %>%
   step_rm(earliest_cr_line, last_credit_pull_d) %>% 
@@ -163,7 +271,7 @@ bl_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>%
   step_nzv(all_predictors()) %>% 
   step_normalize(all_numeric(), -money_made_inv)
 
-bake(prep(bl_recipe), new_data = NULL)
+# bake(prep(bl_recipe), new_data = NULL)
 
 ```
 
@@ -171,10 +279,10 @@ bake(prep(bl_recipe), new_data = NULL)
 
 bl_nn_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
   step_rm(id, purpose, acc_now_delinq, earliest_cr_line, last_credit_pull_d, application_type, delinq_amnt, num_tl_120dpd_2m, num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv, pub_rec, pub_rec_bankruptcies, total_rec_late_fee) %>%
-  step_other(emp_title, threshold = 0.05) %>% 
-  step_other(addr_state, threshold = 0.05) %>% 
-  step_other(emp_length, threshold = 0.05) %>% 
-  step_other(sub_grade, threshold = 0.05) %>%
+  step_other(emp_title, threshold = 0.02) %>% 
+  step_other(addr_state, threshold = 0.02) %>% 
+  step_other(emp_length, threshold = 0.02) %>% 
+  step_other(sub_grade, threshold = 0.02) %>%
   step_dummy(all_nominal_predictors()) %>%
   step_zv(all_predictors()) %>% 
   step_normalize(all_numeric(), -money_made_inv)
@@ -199,9 +307,11 @@ pb <- bake(prep(bl_recipe), new_data = NULL)
 ```
 
 ``` {r}
+# try to work more with this option
+# dropping categorical variables, dropping dates completely
+# random forest
 bl_nochar_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
-  step_rm(all_nominal(), id, emp_title, purpose, last_credit_pull_d, earliest_cr_line, acc_now_delinq, application_type, delinq_amnt, num_tl_120dpd_2m, num_tl_90g_dpd_24m, num_tl_30dpd, out_prncp_inv, pub_rec, pub_rec_bankruptcies, total_rec_late_fee) %>% 
-  step_log(num_sats) %>% 
+  step_rm(all_nominal(), last_credit_pull_d, earliest_cr_line) %>% 
   step_normalize(all_numeric(), -money_made_inv)
 
 bl_en_nochar_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>% 
@@ -211,7 +321,21 @@ bl_en_nochar_recipe <- recipe(money_made_inv ~ ., data = bl_train) %>%
   step_zv(all_predictors()) %>% 
   step_normalize(all_numeric(), -money_made_inv)
 
+nochar_pb <- bake(prep(bl_nochar_recipe), new_data = NULL)
 ```
+
+```{r}
+# expand the range for parameters
+# load("model_info/mars_tuned.rda")
+load("model_info/rf_tuned.rda")
+```
+
+```{r}
+# autoplot(mars_tuned)
+autoplot(rf_tuned)
+```
+
+
 
 ## Writing Objects for Tuning
 
@@ -221,12 +345,22 @@ bl_controls <- control_resamples(save_pred = TRUE)
 # Model setup and tuning
 save(bl_folds, 
      bl_recipe,
-     bl_en_recipe,
+     bl_nochar_recipe,
+     basic_recipe,
      bl_train,
      bl_test,
      bl_controls,
-     bl_nn_recipe,
      file = "model_info/bl_setup.rda")
+
+save(bl_folds, 
+     bl_recipe,
+     bl_nochar_recipe,
+     barebones_recipe,
+     basic_recipe,
+     bl_train,
+     bl_test,
+     bl_controls,
+     file = "model_info/ensemble_tuning//bl_setup.rda")
 
 ```
 

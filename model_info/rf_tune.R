@@ -20,7 +20,7 @@ rf_model <- rand_forest(mode = "regression",
   set_engine("ranger")
 
 rf_params <- parameters(rf_model) %>% 
-  update(mtry = mtry(range = c(2, 10)))
+  update(mtry = mtry(range = c(2, 13)))
 
 # Grid
 rf_grid <- grid_regular(rf_params, levels = 5)
@@ -28,7 +28,7 @@ rf_grid <- grid_regular(rf_params, levels = 5)
 # Workflow
 rf_wf <- workflow() %>% 
   add_model(rf_model) %>% 
-  add_recipe(bl_recipe)
+  add_recipe(bl_nochar_recipe)
 
 # tuning and fitting - DON"T RUN HERE
 tic("Random Forest Model")
@@ -54,9 +54,9 @@ final_results <- rf_results %>%
 
 final_results <- final_results[c(2,1)]
 
-write_csv(final_results, path="Lin_Kylie_RF_RegComp.csv")
+write_csv(final_results, path="Lin_Kylie_RF_TEST_RegComp.csv")
 
 
 # Write out results & workflow
-save(rf_tuned, rf_wf, rf_runtime, final_results, file = "rf_tuned.rda")
+save(rf_tuned, rf_wf, rf_runtime, final_results, file = "rf_TEST_tuned.rda")
 
