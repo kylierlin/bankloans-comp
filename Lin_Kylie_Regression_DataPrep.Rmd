@@ -83,8 +83,8 @@ bl_train %>%
 
 ```{r}
 bl_train %>% 
-  ggplot(aes(mort_acc)) +
-  geom_histogram()
+  ggplot(aes(mort_acc, money_made_inv)) +
+  geom_col()
 
 bl_train %>% 
   ggplot(aes(total_rec_late_fee)) +
@@ -173,9 +173,9 @@ bl_numeric
 ```{r}
 library(corrplot)
 correlationMatrix <- cor(bl_numeric[, 1:24])
-print(correlationMatrix)
+# print(correlationMatrix)
 
-highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.5)
+# highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.5)
 # print(highlyCorrelated)
 corrplot(correlationMatrix)
 ```

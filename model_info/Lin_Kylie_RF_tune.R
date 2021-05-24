@@ -2,22 +2,28 @@
 
 library(tidyverse)
 library(tidymodels)
+library(janitor)
 library(tictoc)
 library(janitor)
 library(ranger)
 
+# set seed
 set.seed(3013)
 
+# reading in data
 bl_test <- read_csv("data/test.csv") %>% 
   clean_names()
 bl_train <- read_csv("data/train.csv") %>% 
   clean_names()
 
+# folding data
 bl_folds <- bl_train %>%
-  vfold_cv(v = 5, repeats = 2)
+  vfold_cv(v = 10, repeats = 3, strata = money_made_inv)
 bl_folds
 
-bl_recipe <- recipe(money_made_inv ~ out_prncp_inv + int_rate + loan_amnt + term + grade,
+# making recipe
+bl_recipe <- recipe(money_made_inv ~ out_prncp_inv + int_rate + 
+                      loan_amnt + term + grade,
                     data = bl_train) %>% 
   step_dummy(term, grade) %>% 
   step_normalize(all_predictors())
@@ -29,9 +35,10 @@ rf_model <- rand_forest(mode = "regression",
   set_engine("ranger")
 
 rf_params <- parameters(rf_model) %>% 
+  # range: 1-8
   update(mtry = mtry(range = c(1, 8)))
 
-# Grid
+# Grid, 3 levels
 rf_grid <- grid_regular(rf_params, levels = 3)
 
 # Workflow
@@ -53,16 +60,18 @@ rf_runtime <- tic.log(format = TRUE)
 rf_wf_tune <- rf_wf %>% 
   finalize_workflow(select_best(rf_tuned, metric = "rmse"))
 
+# get results
 rf_results <- fit(rf_wf_tune, bl_train)
 
+# place appropriately into table for submission
 final_results <- rf_results %>%
   predict(new_data = bl_test) %>%
   bind_cols(bl_test %>% select(id)) %>% 
   rename("Id" = id,
          "Predicted" = .pred)
-
 final_results <- final_results[c(2,1)]
 
+# write out for submission
 write_csv(final_results, path="Lin_Kylie_RF_NEW_RegComp.csv")
 
 

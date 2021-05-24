@@ -34,21 +34,21 @@ library(earth)
 
 ```{r}
 load("bl_setup.rda")
-load("ensemble_tuning/blend_results.rda")
+# load("ensemble_tuning/blend_results.rda")
 ```
 
 ```{r}
-rf_results <- read_csv("Lin_Kylie_RF_RegComp.csv") %>% 
-  select(Predicted)
+# rf_results <- read_csv("Lin_Kylie_RF_RegComp.csv") %>% 
+#   select(Predicted)
 
 rf_new_results <- read_csv("Lin_Kylie_RF_NEW_RegComp.csv") %>% 
   select(Predicted)
 
-mars_results <- read_csv("Lin_Kylie_MARS_RegComp.csv") %>% 
-  select(Predicted)
-
-ensemble_results <- read_csv("ensemble_tuning/Ensemble_Reg.csv") %>% 
-  select(Predicted)
+# mars_results <- read_csv("Lin_Kylie_MARS_RegComp.csv") %>% 
+#   select(Predicted)
+# 
+# ensemble_results <- read_csv("ensemble_tuning/Ensemble_Reg.csv") %>% 
+#   select(Predicted)
 
 # rf_results %>% 
 #   summary()
@@ -62,8 +62,8 @@ rf_new_results %>%
 #   ggplot(aes(Predicted)) +
 #     geom_histogram(bins = 500)
 
-ensemble_results %>% 
-  summary()
+# ensemble_results %>% 
+#   summary()
 
 bl_train %>% 
   select(money_made_inv) %>% 
